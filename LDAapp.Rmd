@@ -1,0 +1,197 @@
+---
+title: "LDA app - Seminario Metodologías Cualitativas"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(lsa)
+library(tm)
+library(tidyverse)
+library(tidytext)
+library(stm)
+library(ggplot2)
+library(scales)
+library(reshape2)
+library(topicmodels)
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+En esta parte del dashboard podéis cambiar el número de topics y cargar los archivos de texto para conformar el corpus.
+
+```{r}
+fileInput("txts", label = "Carga uno o más archivos de texto", multiple = TRUE)
+sliderInput("topic_num", label = "Elije el número de topics", min = 3, max = 12, value = 6)
+selectInput("model", label = "Elige un modelo", choices = c("Structural Topic Models" = "stm", "Latent Dirichlet Allocation" = "lda"))
+```
+
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Personas a topics
+
+```{r}
+
+dfm = reactive({
+  files = input$txts$datapath
+  names = input$txts$name
+  data = data.frame(matrix(ncol = 2, nrow = 0))
+  
+  for (i in 1:length(files)){
+  temp = read.csv(file = files[i], header = FALSE, sep = "\n")
+  person_name = rep(substr(names[i],start = 1, stop = nchar(names[i])-4), length(temp))
+  temp = cbind(temp,person_name)
+  data = rbind(data,temp)
+  }
+  
+  colnames(data) = c("text", "name")
+  data = tibble(data)
+  
+  custom_stop_words <- bind_rows(stop_words,
+                               data_frame(word = tm::stopwords("spanish"),
+                                          lexicon = "custom"))
+  tidy_data <- data %>%
+    mutate(line = row_number()) %>%
+    unnest_tokens(word, text) %>%
+    anti_join(custom_stop_words) %>% 
+    filter(!word %in% c("sé", "si", "así", "pues", "aquí", "bueno", "tal", "bien", "cómo", "ser", "realmente", "habia", "allí", "hacer", "íbamos", "cosas", "ahí", "vale", "algún", "alguna", "cosa", "recuerdo", "eh", "cualquier", "ibas", "mucha", "entonces", "luego", "ir", "siempre", "resulta", "hecho", "mejor", "ahora", "lado", "verdad", "acuerdo", "menos", "claro", "ver", "creo", "sabes", "muchísimo", "pensaba", "lucía", "gusta", "súper", "vivido", "veces", "sentido", "bastante", "dos", "ejemplo", "justo", "toda", "además", "hizo", "muchas"))
+  
+  dfm <- tidy_data %>%
+    count(name, word, sort = TRUE) %>%
+    cast_dfm(name, word, n)
+
+  return(dfm)
+
+})
+
+topic_model = reactive({
+  if (input$model == "stm"){
+    topic_model <- stm(dfm(), K = as.integer(input$topic_num), 
+                     verbose = FALSE, init.type = "Spectral")
+    return(topic_model)
+  }else if (input$model == "lda"){
+    topic_model <- LDA(dfm(), k = as.integer(input$topic_num))
+    return(topic_model)
+  }
+  
+})
+
+td_gamma = reactive({
+  
+  td_gamma <- tidy(topic_model(), matrix = "gamma",                    
+                   document_names = rownames(dfm()))
+})
+
+td_beta = reactive({
+  td_beta <- tidy(topic_model(), matrix = "beta",                    
+                   document_names = rownames(dfm()))
+})
+
+renderPlot({
+  tryCatch(
+    {
+      td_gamma() %>% 
+      mutate(document = factor(document, levels = rev(unique(document)))) %>%
+      group_by(document) %>%
+      top_n(1) %>%
+      ungroup %>%
+      ggplot(aes(document, gamma, label = document, fill = as.factor(topic))) +
+      geom_col() +
+      geom_text(aes(document, 0.01), hjust = 0,
+                color = "white", size = 6, fontface = "bold") +
+      scale_fill_manual(values = c("#e60049", "#0bb4ff", "#50e991", "#e6d800", "#9b19f5", "#ffa300",
+                                   "#dc0ab4", "#b3d4ff", "#00bfa0", "#b30000", "#7c1158", "#4421af")) +
+      scale_y_continuous(expand = c(0,0),
+                         labels = percent_format()) +
+      coord_flip() +
+      theme_minimal() +
+      theme(axis.text.y=element_blank()) +
+      labs(x = NULL, y = expression(gamma), fill = "Topic") 
+    },
+    error = function(cnd) "Upload txt first"
+  )
+  
+   
+
+})
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Comprendiendo N Topics
+
+```{r}
+
+fillCol(height = 600, flex = c(NA, 1), 
+  inputPanel(
+    selectizeInput("topic2", "Elije un topic", choices = seq(1,12))
+  ),
+  plotOutput("topicPlot", height = "100%")
+)
+
+output$topicPlot <- renderPlot({
+  tryCatch(
+    {
+      td_beta() %>%
+        filter(topic == as.integer(input$topic2)) %>%
+        top_n(15, beta) %>%
+        mutate(term = reorder(term, beta)) %>%
+        ggplot(aes(term, beta, fill = beta)) +
+        geom_col(show.legend = FALSE) +
+        scale_fill_gradient(low = "#5FBA7D", high = "#108AEC") +
+        scale_y_continuous(expand = c(0,0),
+                           labels = percent_format()) +
+        coord_flip() +
+        theme_minimal(base_size = 18) +
+        labs(x = NULL, y = expression(beta))
+    },
+    error = function(cnd) "Upload txt first"
+  )
+      
+
+})
+
+```
+
+### Comprendiendo palabras en N topics
+
+```{r}
+fillCol(height = 600, flex = c(NA, 1), 
+  inputPanel(
+    textInput("word", "Elije una palabra", value = "facultad")
+  ),
+  plotOutput("wordPlot", height = "100%")
+)
+
+output$wordPlot <- renderPlot({
+  tryCatch(
+    {
+      td_beta() %>% 
+        filter(term == input$word) %>% 
+        arrange(-beta) %>% 
+        top_n(10) %>% 
+        mutate(topic = reorder(topic, beta)) %>%
+        ggplot(aes(topic, beta, fill = beta)) +
+        geom_col(show.legend = FALSE) +
+        scale_fill_gradient(low = "#5FBA7D", high = "#108AEC") +
+        scale_y_continuous(expand = c(0,0),
+                           labels = percent_format()) +
+        coord_flip() +
+        theme_minimal(base_size = 18) +
+        labs(x = NULL, y = expression(beta))
+    },
+    error = function(cnd) "Upload txt first"
+  )
+  
+      
+})
+
+```
+
