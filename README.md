@@ -1,0 +1,1 @@
+# LDAapp_Cualitativas
