@@ -29,7 +29,7 @@ sliderInput("topic_num", label = "Elije el número de topics", min = 3, max = 12
 selectInput("model", label = "Elige un modelo", choices = c("Structural Topic Models" = "stm", "Latent Dirichlet Allocation" = "lda"))
 ```
 
-General Info
+Información General
 ======================================================================
 
 Column {data-width=350}
