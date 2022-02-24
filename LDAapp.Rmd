@@ -18,8 +18,8 @@ library(reshape2)
 library(topicmodels)
 ```
 
-Column {.sidebar}
------------------------------------------------------------------------
+Sidebar {.sidebar}
+======================================================================
 
 En esta parte del dashboard podéis cambiar el número de topics y cargar los archivos de texto para conformar el corpus.
 
@@ -29,7 +29,8 @@ sliderInput("topic_num", label = "Elije el número de topics", min = 3, max = 12
 selectInput("model", label = "Elige un modelo", choices = c("Structural Topic Models" = "stm", "Latent Dirichlet Allocation" = "lda"))
 ```
 
-
+General Info
+======================================================================
 
 Column {data-width=350}
 -----------------------------------------------------------------------
@@ -91,6 +92,13 @@ td_gamma = reactive({
 td_beta = reactive({
   td_beta <- tidy(topic_model(), matrix = "beta",                    
                    document_names = rownames(dfm()))
+})
+
+words_summary = reactive({
+  model <- stm(dfm(), K = as.integer(input$topic_num), 
+                     verbose = FALSE, init.type = "Spectral")
+  words_summary = summary(model)
+  return(words_summary)
 })
 
 renderPlot({
@@ -192,6 +200,32 @@ output$wordPlot <- renderPlot({
   
       
 })
+
+```
+
+
+Palabras por Topic STM
+======================================================================
+
+### Resultados STM por método de estimación
+
+```{r}
+
+fillCol(height = 600, flex = c(NA, 1), 
+  inputPanel(
+    selectizeInput("method", "Elije un método", choices = 1:4)
+  ),
+  tableOutput("wordsTable")
+)
+
+output$wordsTable <- renderTable({
+  mytable = data.frame(words_summary()[[as.numeric(input$method)]])
+  rownames(mytable) = paste0("topic ",rownames(mytable))
+  colnames(mytable) = 1:ncol(mytable)
+  colnames(mytable) = paste0("word ",colnames(mytable))
+  mytable
+
+}, rownames=TRUE)
 
 ```
 

@@ -1,0 +1,13 @@
+name: LDAapp
+title: LDAapp
+username:
+account: alexmrtnz
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 5580850
+bundleId: 5613097
+url: https://alexmrtnz.shinyapps.io/LDAapp/
+when: 1645695702.07914
+lastSyncTime: 1645695702.0792
+asMultiple: FALSE
+asStatic: FALSE
