@@ -45,7 +45,7 @@ dfm = reactive({
   data = data.frame(matrix(ncol = 2, nrow = 0))
   
   for (i in 1:length(files)){
-  temp = read.csv(file = files[i], header = FALSE, sep = "\n")
+  temp = read.csv(file = files[i], header = FALSE, sep = "\n", encoding = "UTF-8")
   person_name = rep(substr(names[i],start = 1, stop = nchar(names[i])-4), length(temp))
   temp = cbind(temp,person_name)
   data = rbind(data,temp)
